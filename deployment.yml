@@ -1,0 +1,87 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: bff
+  #namespace: default #TODO: Make the namespace parameterized.
+  labels:
+      app: bff
+      run: bff
+spec:
+  replicas: 1 # TODO: Update the no of replicas
+  strategy:
+    type: Recreate # TODO: Update the strategy
+  template:
+    metadata:
+      labels:
+        app: bff
+        run: bff
+    spec:
+      containers:
+        - name: graphql-cart
+          image: gcr.io/cognitive-genie-63754/coc_graphql-cart:latest  
+		  ports:
+		    - containerPort: 3001
+		- name: graphql-inventory  
+		  image: gcr.io/cognitive-genie-63754/coc_graphql-inventory:latest
+		  ports:
+		    - containerPort: 3002
+		- name: graphql-sku
+          image: gcr.io/cognitive-genie-63754/coc_graphql-sku:latest
+		  ports:
+		    - containerPort: 3003
+        - name: graphql-gateway
+		  image: gcr.io/cognitive-genie-63754/coc_graphql-gateway:latest
+		  ports:
+		    - containerPort: 3004
+          imagePullPolicy: Always # TODO: Change it to IfNotPresent once CD setup done on cloud
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /actuator/health
+              port: 4040
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: bff
+          ports:
+          - containerPort: 4040
+            name: http
+            protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 4040
+            initialDelaySeconds: 100
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 5
+#          env:
+#            - name: EUREKA_INSTANCE_HOSTNAME
+#              value: 'discoveryservice'
+#          securityContext:
+#            privileged: false   
+#          envFrom:
+#            - configMapRef:
+#                name: coc-config            
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+      imagePullSecrets:
+        - name: acr-coc               
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bff
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1beta1
+    kind: Deployment
+    name: bff
+  minReplicas: 1 # TODO: Update the no of minReplicas
+  maxReplicas: 1 # TODO: Update the no of maxReplicas
+  targetCPUUtilizationPercentage: 80
